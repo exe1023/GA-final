@@ -51,7 +51,6 @@ class AgentGRL():
         """
         # Todo: parallize it!
         for chrom in self.population:
-            chrom.steps = 0
             chrom.train()
 
     @staticmethod
