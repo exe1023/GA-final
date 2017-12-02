@@ -1,42 +1,38 @@
+import copy
 import itertools
 import torch
-from agent_dqn import AgentDQN
 
 
-class AgentGQN():
+class AgentGRL():
     """ A deep Q network agent optimize with genetic algorithm.
 
     Args:
         env (gym): Env made with gym.
+        base_agent (Agent): Any RL agent.
+        agent_clf (Classifier): Any classifier that map observation to
+            choice of agent. Used in process of crossover (distillation).
         population_size (int): Population size of GA.
         n_generations (int): Number of generation of GA.
-        dqn_steps (int): Namely number of steps to train Q-learning.
         distil_steps (int): Number of steps to run to do distillation.
         use_cuda (bool): Wheather or not use CUDA (GPU).
-        chrom_args (dict): Arguments of each chromosome in the population,
-            namely arguments for the underlying DQN. Note that some attributes
-            may be overwrite if it is specified in AgentGQN.
     """
     def __init__(self, env,
+                 base_agent,
+                 agent_clf,
                  population_size=8,
                  n_generations=100,
-                 mut_steps=10000,
                  distil_steps=10000,
-                 use_cuda=None,
-                 chrom_args={}):
+                 use_cuda=None):
         self.env = env
+        self.agent_clf = agent_clf
         self.n_generations = n_generations
-        self.mut_steps = mut_steps
         self.distil_steps = distil_steps
         if use_cuda is None:
             use_cuda = torch.cuda.is_available()
         self.use_cuda = use_cuda
 
-        # overwrite some chrom_args
-        chrom_args['max_timesteps'] = mut_steps
-
         # init GA population with random chromosomes
-        self.population = [AgentDQN(chrom_args)
+        self.population = [copy.deepcopy(base_agent)
                            for i in range(population_size)]
 
         # init number of generations
@@ -91,4 +87,6 @@ class AgentGQN():
         Returns:
             chrom: Child chromosome.
         """
+        clfs = []
         pass
+    
