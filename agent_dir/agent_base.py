@@ -40,6 +40,14 @@ class AgentBase:
         """
         pass
 
+    def get_experience(self, agent):
+        """Return observations the agent experienced.
+
+        Returns:
+            np array: Observation the agent experienced.
+        """
+        pass
+
     @staticmethod
     def jointly_make_action(self, observation, agents, agent_weights):
         """Make action according to agents the jointly.
