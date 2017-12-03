@@ -56,11 +56,11 @@ class AgentDQN(AgentBase):
         self.log_file = log_file
 
         self.model = model
-        self.use_cuda = torch.cuda.is_available()
-        self.optimizer = torch.optim.Adam(self._model.parameters(),
+        self._use_cuda = torch.cuda.is_available()
+        self.optimizer = torch.optim.Adam(self.model.parameters(),
                                           lr=learning_rate)
         if self._use_cuda:
-            self.model = self._model.cuda()
+            self.model = self.model.cuda()
 
     def make_action(self, state, test=True):
 
@@ -81,7 +81,7 @@ class AgentDQN(AgentBase):
             state = Variable(state, volatile=True)
             if self._use_cuda:
                 state = state.cuda()
-            action_value = self._model.forward(state.unsqueeze(0))
+            action_value = self.model.forward(state.unsqueeze(0))
             best_action = action_value.max(-1)[1].data.cpu().numpy()
             return best_action[0]
 
@@ -110,7 +110,7 @@ class AgentDQN(AgentBase):
 
         # gradient descend model
         var_states0 = Variable(states0.float())
-        var_action_values = self._model.forward(var_states0) \
+        var_action_values = self.model.forward(var_states0) \
             .gather(1, Variable(actions.view(-1, 1)))
         var_loss = (var_action_values - var_targets) ** 2
 
@@ -122,9 +122,9 @@ class AgentDQN(AgentBase):
         var_loss_mean = torch.sum(var_loss * var_weights) / self.batch_size
 
         # gradient descend loss
-        self._optimizer.zero_grad()
+        self.optimizer.zero_grad()
         var_loss_mean.backward()
-        self._optimizer.step()
+        self.optimizer.step()
 
         # update experience priorities
         indices = replay[5]
@@ -176,18 +176,7 @@ class AgentDQN(AgentBase):
             loss = self.update_model(target_q)
 
             # update target network
-            if self.t % self.target_network_update_freq == 0:
-                target_q.load_state_dict(self._model.state_dict())
-
-            if self.t % self.save_freq == 0:
-                mean_reward = \
-                    sum(episode_rewards[-100:]) / len(episode_rewards[-100:])
-                if best_mean_reward < mean_reward:
-                    print('save best model with mean reward = %f'
-                          % mean_reward)
-                    best_mean_reward = mean_reward
-                    torch.save({
-                        'model': self._model.state_dict()
-                    }, 'model')
+            if self.t % self.target_network_update_period == 0:
+                target_q.load_state_dict(self.model.state_dict())
 
             self.t += 1

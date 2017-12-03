@@ -10,17 +10,24 @@ from utils.environment import Environment
 def main(args):
     env = Environment(args.env_name)
 
-    if env.observation_space > 1:
+    if len(env.observation_space.shape) > 1:
         from models.value_nets import CNNValueNet
-        value_net = CNNValueNet(env.observation_space,
+        from models.classifiers import CNNClassifier
+        value_net = CNNValueNet(env.observation_space.shape,
                                 env.action_space.n)
+        clf = CNNClassifier(env.observation_space.shape,
+                            env.action_space.n)
     else:
         from models.value_nets import DNNValueNet
-        value_net = DNNValueNet(env.observation_space,
+        from models.classifiers import DNNClassifier
+        value_net = DNNValueNet(env.observation_space.shape,
                                 env.action_space.n)
+        clf = DNNClassifier(env.observation_space.shape,
+                            env.action_space.n)
 
     agent_dqn = AgentDQN(env, value_net)
-    agent_grl = AgentGRL(env, agent_dqn, population_size=2)
+    agent_grl = AgentGRL(agent_dqn, clf,
+                         population_size=args.population_size)
 
     agent_grl.train()
 
@@ -29,6 +36,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Genetic Reinforce Learning")
     parser.add_argument('--env_name', type=str, default='Pong-v0',
                         help='Environment name.')
+    parser.add_argument('--population_size', type=int, default=8)
     args = parser.parse_args()
     return args
 
