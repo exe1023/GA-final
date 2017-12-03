@@ -3,8 +3,8 @@ import numpy as np
 import random
 import torch
 from torch.autograd import Variable
-from agent_base import AgentBase
-from openai_replay_buffer import PrioritizedReplayBuffer as ReplayBuffer
+from .agent_base import AgentBase
+from utils.openai_replay_buffer import PrioritizedReplayBuffer as ReplayBuffer
 
 
 class AgentDQN(AgentBase):

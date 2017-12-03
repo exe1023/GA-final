@@ -20,7 +20,7 @@ def main(args):
                                 env.action_space.n)
 
     agent_dqn = AgentDQN(env, value_net)
-    agent_grl = AgentGRL(env, agent_dqn)
+    agent_grl = AgentGRL(env, agent_dqn, population_size=2)
 
     agent_grl.train()
 
