@@ -15,14 +15,25 @@ def wrap_env(env_name):
 
 
 class PongWrapper(gym.Wrapper):
+    """Wrap Pong env so
+        - Observation is preprocessed.
+        - An episode ends when one get one point.
+
+    Args:
+        env: Pong env.
+    """
     def __init__(self, env):
         super(PongWrapper, self).__init__(env)
         self._prev_obs = 0
         self.observation_space = gym.spaces.Box(
             low=0, high=1, shape=(80, 80, 1))
+        self._real_done = True
 
     def reset(self):
-        self.env.reset()
+        if self._real_done:
+            self.env.reset()
+            self._real_done = False
+
         return np.zeros((80, 80, 1))
 
     def step(self, action):
@@ -51,5 +62,9 @@ class PongWrapper(gym.Wrapper):
 
         # store current state
         self._prev_obs = obs
+
+        # store if really done
+        self._real_done = done
+        done = reward != 0
 
         return processed, reward, done, info
