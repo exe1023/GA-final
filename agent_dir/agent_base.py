@@ -32,11 +32,12 @@ class AgentBase:
         """
         pass
 
-    def learn(self, agent):
+    def learn(self, expert, experience):
         """Distil knowledge from agent.
 
         Args:
-            agent (AgentBase): Agent to learn from.
+            expert (AgentBase): Agent to learn from.
+            experience (np array): Observation the agent experienced.
         """
         pass
 

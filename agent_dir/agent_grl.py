@@ -13,19 +13,16 @@ class AgentGRL():
             choice of agent. Used in process of crossover (distillation).
         population_size (int): Population size of GA.
         n_generations (int): Number of generation of GA.
-        distil_steps (int): Number of steps to run to do distillation.
         use_cuda (bool): Wheather or not use CUDA (GPU).
     """
     def __init__(self,
                  base_agent,
                  agent_clf,
                  population_size=8,
-                 n_generations=100,
-                 distil_steps=10000):
+                 n_generations=100):
         self.base_agent = base_agent
         self.agent_clf = agent_clf
         self.n_generations = n_generations
-        self.distil_steps = distil_steps
 
         # init GA population with random chromosomes
         self.population = [copy.deepcopy(base_agent)
@@ -105,7 +102,7 @@ class AgentGRL():
         child = copy.deepcopy(self.base_agent)
 
         # doing distillation
-        child.learn(hier_agent)
+        child.learn(hier_agent, x)
 
 
 class _HierarchicalAgent(AgentBase):

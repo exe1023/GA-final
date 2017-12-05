@@ -28,6 +28,11 @@ class AgentDQN(AgentBase):
         buffer_size (int): Size of replay buffer.
         target_network_update_period (int): Period of update target network
             with online network.
+        distil_dagger_iters (int): Number of iterations to run DAgger.
+        distil_epochs (int): Number epochs to run when fitting self.model with
+            expert's prediction.
+        dagger_explore_steps (int): Number of steps to explore in each dagger
+            iterations.
     """
     def __init__(self, env, model,
                  max_timesteps=50000,
@@ -40,6 +45,9 @@ class AgentDQN(AgentBase):
                  prioritized_replay_eps=1e-4,
                  prioritized_replay_alpha=0.9,
                  target_network_update_period=5000,
+                 distil_dagger_iters=10,
+                 distil_epochs=100,
+                 dagger_explore_steps=5000,
                  log_file=None):
         self.t = 0
         self.env = env
@@ -53,12 +61,19 @@ class AgentDQN(AgentBase):
                                           prioritized_replay_alpha)
         self.prioritized_replay_eps = prioritized_replay_eps
         self.target_network_update_period = target_network_update_period
+
+        self.distil_init_epochs = distil_dagger_epochs
+        self.distil_dagger_epochs = distil_dagger_epochs
+        self.distil_dagger_steps = distil_dagger_steps
+
         self.log_file = log_file
 
         self.model = model
         self._use_cuda = torch.cuda.is_available()
         self.optimizer = torch.optim.Adam(self.model.parameters(),
                                           lr=learning_rate)
+        self.loss = torch.nn.MSELoss(reduce=False)
+
         if self._use_cuda:
             self.model = self.model.cuda()
 
@@ -112,7 +127,7 @@ class AgentDQN(AgentBase):
         var_states0 = Variable(states0.float())
         var_action_values = self.model.forward(var_states0) \
             .gather(1, Variable(actions.view(-1, 1)))
-        var_loss = (var_action_values - var_targets) ** 2
+        var_loss = self.loss(var_action_values, var_targets)
 
         if self.t % 5000 == 0:
             print(var_targets)
@@ -180,3 +195,69 @@ class AgentDQN(AgentBase):
                 target_q.load_state_dict(self.model.state_dict())
 
             self.t += 1
+
+    def learn(self, expert, observations):
+        def fit(dataloader, epochs):
+            """function that fit self.model with data in dataloader"""
+            for epoch in range(epochs):
+                for obs, target in dataloader:
+                    if self._use_cuda:
+                        obs = obs.cuda()
+                    predict = self.model.forward(obs)
+                    loss = torch.nn.functional.mse_loss(predict, target)
+                    self.optimizer.zero_grad()
+                    loss.backward()
+                    self.optimizer.step()
+
+        # collect target action value on observations
+        targets = []
+        for i in range(0, observations.shape[0], self.batch_size):
+            batch_obs = observations[i:i+self.batch_size]
+            if self._use_cuda:
+                batch_obs = batch_obs.cuda()
+            target = expert.forward(batch_obs)
+            targets.append(target.cpu())  # take care GPU ram usage here
+        targets = torch.cat(targets, dim=0)
+
+        # make dataloader
+        dataset = torch.utils.data.TensorDataset(observations, targets)
+        dataloader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=self.batch_size,
+            shuffle=True)
+
+        # fit self.model
+        fit(dataloader, self.distil_epochs)
+
+        # start doing dagger
+        for i in range(self.distil_dagger_iters):
+            # collect trajectories explored with self.model
+            observations = [observations]
+            targets = [targets]
+            obs = self.env.reset()
+            for step in range(self.dagger_explore_steps):
+                observations.append(obs)
+
+                # use expert's raw predict as target
+                raw = expert.get_action_raw(obs)
+                targets.append(raw)
+
+                # use self.model to make action
+                action = self.make_action(obs)
+
+                # step
+                obs, _, done, _ = self.env.step(action)
+                if done:
+                    obs = self.env.reset()
+
+            # make data loader
+            targets = torch.cat(targets, dim=0)
+            observations = torch.cat(observations, dim=0)
+            dataset = torch.utils.data.TensorDataset(observations, targets)
+            dataloader = torch.utils.data.DataLoader(
+                dataset,
+                batch_size=self.batch_size,
+                shuffle=True)
+
+            # fit again
+            fit(dataloader, self.distil_epochs)
