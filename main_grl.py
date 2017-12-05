@@ -4,26 +4,25 @@ import sys
 import traceback
 from agent_dir.agent_dqn import AgentDQN
 from agent_dir.agent_grl import AgentGRL
-from utils.environment import Environment
+from utils.classifier import Classifier
+from utils.environment import wrap_env
 
 
 def main(args):
-    env = Environment(args.env_name)
+    env = wrap_env(args.env_name)
 
     if len(env.observation_space.shape) > 1:
-        from models.value_nets import CNNValueNet
-        from models.classifiers import CNNClassifier
-        value_net = CNNValueNet(env.observation_space.shape,
-                                env.action_space.n)
-        clf = CNNClassifier(env.observation_space.shape,
-                            env.action_space.n)
+        from models.value_nets import CNNValueNet as ValueNet
+        from models.clf_nets import CNNet as CLFNet
     else:
-        from models.value_nets import DNNValueNet
-        from models.classifiers import DNNClassifier
-        value_net = DNNValueNet(env.observation_space.shape,
-                                env.action_space.n)
-        clf = DNNClassifier(env.observation_space.shape,
-                            env.action_space.n)
+        from models.value_nets import DNNValueNet as ValueNet
+        from models.clf_nets import DNNet as CLFNet
+
+    value_net = ValueNet(env.observation_space.shape,
+                         env.action_space.n)
+    clf_net = CLFNet(env.observation_space.shape,
+                     env.action_space.n)
+    clf = Classifier(clf_net)
 
     agent_dqn = AgentDQN(env, value_net)
     agent_grl = AgentGRL(agent_dqn, clf,

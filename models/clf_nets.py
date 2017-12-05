@@ -15,9 +15,9 @@ def _calc_shape(shape, kernel_size, stride, padding, dilation=1):
     return shape
 
 
-class CNNClassifier(torch.nn.Module):
+class CNNet(torch.nn.Module):
     def __init__(self, input_shape, n_classes):
-        super(CNNClassifier, self).__init__()
+        super(CNNet, self).__init__()
         self.cnn = torch.nn.Sequential(
             torch.nn.Conv2d(input_shape[-1], 8, 5,
                             stride=2, padding=2),
@@ -46,9 +46,9 @@ class CNNClassifier(torch.nn.Module):
         return action
 
 
-class DNNClassifier(torch.nn.Module):
+class DNNet(torch.nn.Module):
     def __init__(self, input_shape, n_classes):
-        super(DNNClassifier, self).__init__()
+        super(DNNet, self).__init__()
         self.mlp = torch.nn.Sequential(
             torch.nn.Linear(input_shape[0], 512),
             torch.nn.ELU(),
