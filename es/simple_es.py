@@ -43,9 +43,8 @@ class ES(object):
             rewards: np.array, shape = (npop)
         '''
         # standardize the rewards to have a gaussian distribution
-        A = (rewards - np.mean(rewards)) / np.std(rewards)
+        A = (rewards - np.mean(rewards)) / (np.std(rewards) + 1e-6)
         # perform the parameter update. The matrix multiply below
         # is just an efficient way to sum up all the rows of the noise matrix N,
         # where each row N[j] is weighted by A[j]
         self.solution = self.solution + self.alpha / (self.npop * self.sigma) * np.dot(self.N.T, A)
-        
