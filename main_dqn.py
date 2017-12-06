@@ -16,6 +16,7 @@ def parse():
     parser.add_argument('--dueling',action='store_true',help='whether to use dueling network')
     parser.add_argument('--double',action='store_true',help='whether to use double q network')
     parser.add_argument('--n_steps',type=int,default=1,help='n-steps update')
+    parser.add_argument('--noise_linear',action='store_true',help='noise_linear')
 
     # Training hyperparameters
     parser.add_argument('--batch_size',type=int,default=32,help='batch size for training')
