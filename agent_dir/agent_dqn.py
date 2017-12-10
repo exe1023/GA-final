@@ -62,9 +62,9 @@ class AgentDQN(AgentBase):
         self.prioritized_replay_eps = prioritized_replay_eps
         self.target_network_update_period = target_network_update_period
 
-        self.distil_init_epochs = distil_dagger_epochs
-        self.distil_dagger_epochs = distil_dagger_epochs
-        self.distil_dagger_steps = distil_dagger_steps
+        self.distil_dagger_iters = distil_dagger_iters
+        self.distil_epochs = distil_epochs
+        self.dagger_explore_steps = dagger_explore_steps
 
         self.log_file = log_file
 
@@ -76,29 +76,6 @@ class AgentDQN(AgentBase):
 
         if self._use_cuda:
             self.model = self.model.cuda()
-
-    def make_action(self, state, test=True):
-
-        # decide if doing exploration
-        if not test:
-            self.epsilon = 1 \
-                - (1 - self.exploration_final_eps) \
-                * self.t / self.exploration_steps
-            self.epsilon = max(self.epsilon, self.exploration_final_eps)
-        else:
-            self.epsilon = self.exploration_final_eps
-        explore = random.random() < self.epsilon
-
-        if explore:
-            return random.randint(0, self.n_actions - 1)
-        else:
-            state = torch.from_numpy(state).float()
-            state = Variable(state, volatile=True)
-            if self._use_cuda:
-                state = state.cuda()
-            action_value = self.model.forward(state.unsqueeze(0))
-            best_action = action_value.max(-1)[1].data.cpu().numpy()
-            return best_action[0]
 
     def update_model(self, target_q):
         # sample from replay_buffer
@@ -196,6 +173,31 @@ class AgentDQN(AgentBase):
 
             self.t += 1
 
+    def make_action(self, observation, test=True):
+        # decide if doing exploration
+        if not test:
+            self.epsilon = 1 \
+                - (1 - self.exploration_final_eps) \
+                * self.t / self.exploration_steps
+            self.epsilon = max(self.epsilon, self.exploration_final_eps)
+        else:
+            self.epsilon = self.exploration_final_eps
+        explore = random.random() < self.epsilon
+
+        if explore:
+            return random.randint(0, self.n_actions - 1)
+        else:
+            raw = self.get_action_raw(observation)
+            return np.argmax(raw)[0]
+
+    def get_action_raw(self, observation):
+        obs = torch.from_numpy(observation).float()
+        var_obs = Variable(obs, volatile=True)
+        if self._use_cuda:
+            var_obs = var_obs.cuda()
+        var_action_value = self.model.forward(var_obs.unsqueeze(0))
+        return var_action_value.data.cpu().numpy().reshape(-1,)
+
     def learn(self, expert, observations):
         def fit(dataloader, epochs):
             """function that fit self.model with data in dataloader"""
@@ -261,3 +263,20 @@ class AgentDQN(AgentBase):
 
             # fit again
             fit(dataloader, self.distil_epochs)
+
+    def get_experience(self, agent):
+        return self.replay_buffer.get_experience()
+
+    @staticmethod
+    def jointly_make_action(self, observation, agents, agent_weights):
+        raw = self.jointly_get_action_raw(observation, agents, agent_weights)
+        return np.argmax(raw, -1)[0, 0]
+
+    @staticmethod
+    def jointly_get_action_raw(self, observation, agents, agent_weights):
+        # TODO: Parallization
+        raw = 0
+        for agent, weight in zip(agents, agent_weights):
+            raw += agent.get_action_raw(observation) * weight
+
+        return raw
