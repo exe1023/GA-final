@@ -1,5 +1,6 @@
 import copy
 import itertools
+import multiprocessing
 import numpy as np
 from .agent_base import AgentBase
 
@@ -14,12 +15,15 @@ class AgentGRL():
         population_size (int): Population size of GA.
         n_generations (int): Number of generation of GA.
         use_cuda (bool): Wheather or not use CUDA (GPU).
+        n_workers (int): Number of threads to use. If -1, then use the
+            number of cpu.
     """
     def __init__(self,
                  base_agent,
                  agent_clf,
                  population_size=8,
-                 n_generations=100):
+                 n_generations=100,
+                 n_workers=-1):
         self.base_agent = base_agent
         self.agent_clf = agent_clf
         self.n_generations = n_generations
@@ -30,6 +34,11 @@ class AgentGRL():
 
         # init number of generations
         self.gen = 0
+
+        if n_workers == -1:
+            self.n_workers = multiprocessing.cpu_count()
+        else:
+            self.n_workers = n_workers
 
     def train(self):
         """Train it!
@@ -46,7 +55,15 @@ class AgentGRL():
     def _mutate(self):
         """Mutate chromosomes in the population.
         """
-        # Todo: parallize it!
+        # it doesn't work
+        # multiprocessing.set_start_method('spawn')
+        # with multiprocessing.Pool(self.n_workers) as p:
+        #     for chrom in self.population:
+        #         p.apply_async(chrom.train, ())
+
+        #         p.close()
+        #         p.join()
+
         for chrom in self.population:
             chrom.train()
 
@@ -59,7 +76,7 @@ class AgentGRL():
         Returns:
             float: Fitness of the parent.
         """
-        pass
+        return parent[0].get_fitness(*parent)
 
     def _select(self):
         """Select parents to generate children.
@@ -69,9 +86,14 @@ class AgentGRL():
         """
         parents = list(itertools.combinations(self.population, 2))
         fitnesses = list(map(self._evaluate, parents))
-        threshold = sorted(fitnesses)[self.population]
-        return list(filter(lambda fitness: fitness >= threshold,
-                           fitnesses))
+        threshold = sorted(fitnesses)[-len(self.population)]
+        selected = []
+        for parent, fitness in zip(parents, fitnesses):
+            if fitness >= threshold:
+                selected.append(parent)
+
+        assert(len(selected) == len(self.population))
+        return selected
 
     def _crossover(self, parent):
         """Crossover parent and generate child.
@@ -89,10 +111,11 @@ class AgentGRL():
         # make training data for the classifier
         x = np.concatenate([p0_exp, p1_exp], axis=0)
         y = np.concatenate([np.zeros(p0_exp.shape[0]),
-                            np.ones(p1_exp.shape[1])],
+                            np.ones(p1_exp.shape[0])],
                            axis=0)
 
         # train the classifier
+        print('start training classifier')
         clf.fit(x, y)
 
         # build hierarchical agent
@@ -102,6 +125,7 @@ class AgentGRL():
         child = copy.deepcopy(self.base_agent)
 
         # doing distillation
+        print('start doing distillation')
         child.learn(hier_agent, x)
 
 
@@ -114,7 +138,7 @@ class _HierarchicalAgent(AgentBase):
         agents (tuple of Agent): Agents.
     """
     def __init__(self, clf, agents):
-        super(_HierarchicalAgent).__init__(self)
+        super(_HierarchicalAgent, self).__init__()
         self.clf = clf
         self.agents = agents
 

@@ -1,4 +1,3 @@
-import numpy as np
 
 
 class AgentBase:
@@ -28,7 +27,8 @@ class AgentBase:
         Args:
             observation (np.array): Observation.
         Returns:
-            np array: Raw values for each action.
+            np array: Raw values for each action with shape
+                (batch_size, n_actions).
         """
         pass
 
@@ -41,7 +41,7 @@ class AgentBase:
         """
         pass
 
-    def get_experience(self, agent):
+    def get_experience(self):
         """Return observations the agent experienced.
 
         Returns:
@@ -50,7 +50,7 @@ class AgentBase:
         pass
 
     @staticmethod
-    def jointly_make_action(self, observation, agents, agent_weights):
+    def jointly_make_action(observation, agents, agent_weights):
         """Make action according to agents the jointly.
 
         This method should mix opinions from agents. For example, if the agents
@@ -70,7 +70,7 @@ class AgentBase:
         pass
 
     @staticmethod
-    def jointly_get_action_raw(self, observation, agents, agent_weights):
+    def jointly_get_action_raw(observation, agents, agent_weights):
         """Return action value according to the agents jointly.
 
         Args:
@@ -79,9 +79,23 @@ class AgentBase:
             agent_weights (np array): np array of shape (n_agents,) that
                 represents weights of each agent.
         Returns:
-            np array: np array of shape (n_actions,).
+            np array: np array of shape (batch_size, n_actions).
         """
-        values = [agent.get_action_raw(observation)
-                  for agent in agents]
-        values = np.array(values)
-        return (agent_weights.reshape(1, -1) @ values.T).reshape(-1)
+        action_raw = 0
+        for agent, weight in zip(agents, agent_weights.T):
+            action_raw += weight.reshape(-1, 1) \
+                          * agent.get_action_raw(observation)
+        return action_raw
+
+    @staticmethod
+    def get_fitness(agent1, agent2):
+        """Return fitness of pair of agents.
+
+        Args:
+            agent1 (AgentBase): First agent in the pair.
+            agent2 (AgentBase): Second agent in the pair.
+
+        Returns:
+            float: fitness of the pair of agents.
+        """
+        pass

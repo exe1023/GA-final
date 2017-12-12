@@ -20,13 +20,16 @@ def main(args):
 
     value_net = ValueNet(env.observation_space.shape,
                          env.action_space.n)
-    clf_net = CLFNet(env.observation_space.shape,
-                     env.action_space.n)
-    clf = Classifier(clf_net)
+    clf_net = CLFNet(env.observation_space.shape, 2)
+    clf = Classifier(clf_net, max_epochs=5)
 
-    agent_dqn = AgentDQN(env, value_net)
+    agent_dqn = AgentDQN(env, value_net,
+                         max_timesteps=100,
+                         exploration_steps=10,
+                         buffer_size=100)
     agent_grl = AgentGRL(agent_dqn, clf,
-                         population_size=args.population_size)
+                         population_size=args.population_size,
+                         n_workers=4)
 
     agent_grl.train()
 

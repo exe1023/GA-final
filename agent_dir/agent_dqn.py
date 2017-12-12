@@ -44,10 +44,10 @@ class AgentDQN(AgentBase):
                  buffer_size=50000,
                  prioritized_replay_eps=1e-4,
                  prioritized_replay_alpha=0.9,
-                 target_network_update_period=5000,
-                 distil_dagger_iters=10,
-                 distil_epochs=100,
-                 dagger_explore_steps=5000,
+                 target_network_update_period=2000,
+                 distil_dagger_iters=2,
+                 distil_epochs=10,
+                 dagger_explore_steps=500,
                  log_file=None):
         self.t = 0
         self.env = env
@@ -79,39 +79,39 @@ class AgentDQN(AgentBase):
 
     def update_model(self, target_q):
         # sample from replay_buffer
-        beta = 0.1 \
-            + (1 - 0.10) \
+        beta = 0.4 \
+            + (1 - 0.40) \
             * self.t / self.max_timesteps
         beta = min(beta, 1)
         replay = self.replay_buffer.sample(self.batch_size, beta=beta)
 
         # prepare tensors
-        tensor_replay = [torch.from_numpy(val) for val in replay]
+        tensor_replay = [torch.from_numpy(val) for val in replay[:-1]]
         if self._use_cuda:
             tensor_replay = [val.cuda() for val in tensor_replay]
-        states0, actions, rewards, states1, dones, \
-            _, weights = tensor_replay
+        states0, actions, rewards, states1, dones, weights = tensor_replay
 
         # predict target with target network
-        var_states1 = Variable(states1.float())
-        var_target_reward = \
-            target_q.forward(var_states1).max(-1)[0]
-        var_targets = Variable(rewards) \
-            + self.gamma * var_target_reward * (-Variable(dones) + 1)
-        var_targets = var_targets.unsqueeze(-1).detach()
+        max_actions = self.model.forward(Variable(states1.float())).max(-1)[1]
+        var_target_action_values = \
+            target_q.forward(Variable(states1.float())) \
+                    .gather(1, max_actions.unsqueeze(-1)) \
+                    .squeeze(-1)
+        var_targets = Variable(rewards.float()) \
+            + self.gamma * var_target_action_values \
+            * (Variable(-dones.float() + 1))
+        var_targets = var_targets.detach()
 
         # gradient descend model
         var_states0 = Variable(states0.float())
         var_action_values = self.model.forward(var_states0) \
-            .gather(1, Variable(actions.view(-1, 1)))
-        var_loss = self.loss(var_action_values, var_targets)
-
-        if self.t % 5000 == 0:
-            print(var_targets)
+            .gather(1, Variable(actions.view(-1, 1))) \
+            .squeeze(-1)
+        var_loss = (var_action_values - var_targets) ** 2
 
         # weighted sum loss
-        var_weights = Variable(weights)
-        var_loss_mean = torch.sum(var_loss * var_weights) / self.batch_size
+        var_weights = Variable(weights.float())
+        var_loss_mean = torch.mean(var_loss * var_weights)
 
         # gradient descend loss
         self.optimizer.zero_grad()
@@ -119,12 +119,13 @@ class AgentDQN(AgentBase):
         self.optimizer.step()
 
         # update experience priorities
-        indices = replay[5]
-        loss = torch.abs(var_action_values - var_targets).data.cpu().numpy()
+        indices = replay[-1].astype(int)
+        loss = torch.abs(var_action_values - var_targets).data
         new_priority = loss + self.prioritized_replay_eps
+        new_priority = new_priority.cpu().tolist()
         self.replay_buffer.update_priorities(indices, new_priority)
 
-        return np.mean(loss)
+        return torch.mean(loss)
 
     def train(self):
         # init target network
@@ -136,13 +137,8 @@ class AgentDQN(AgentBase):
         # log statics
         loss = 0
         episode_rewards = [0]
-        best_mean_reward = 0
 
-        # make log file pointer
-        if self.log_file is not None:
-            fp_log = open(self.log_file, 'w', buffering=1)
-
-        while self.t < self.max_timesteps:
+        for i in range(self.max_timesteps):
             # play
             for i in range(4):
                 action = self.make_action(state0, False)
@@ -157,10 +153,10 @@ class AgentDQN(AgentBase):
                     state0 = self.env.reset()
                     print('t = %d, r = %f, loss = %f, exp = %f'
                           % (self.t, episode_rewards[-1], loss, self.epsilon))
-                    if self.log_file is not None:
-                        fp_log.write('{},{},{}\n'.format(self.t,
-                                                         episode_rewards[-1],
-                                                         loss))
+                    # if self.log_file is not None:
+                    #     fp_log.write('{},{},{}\n'.format(self.t,
+                    #                                      episode_rewards[-1],
+                    #                                      loss))
                     episode_rewards.append(0)
                 else:
                     state0 = state1
@@ -187,24 +183,27 @@ class AgentDQN(AgentBase):
         if explore:
             return random.randint(0, self.n_actions - 1)
         else:
-            raw = self.get_action_raw(observation)
-            return np.argmax(raw)[0]
+            raw = self.get_action_raw(np.expand_dims(observation, 0))
+            return np.argmax(raw)
 
     def get_action_raw(self, observation):
         obs = torch.from_numpy(observation).float()
         var_obs = Variable(obs, volatile=True)
         if self._use_cuda:
             var_obs = var_obs.cuda()
-        var_action_value = self.model.forward(var_obs.unsqueeze(0))
-        return var_action_value.data.cpu().numpy().reshape(-1,)
+        var_action_value = self.model.forward(var_obs)
+        return var_action_value.data.cpu().numpy()
 
     def learn(self, expert, observations):
         def fit(dataloader, epochs):
             """function that fit self.model with data in dataloader"""
             for epoch in range(epochs):
                 for obs, target in dataloader:
+                    obs = Variable(obs.float())
+                    target = Variable(target.float())
                     if self._use_cuda:
                         obs = obs.cuda()
+                        target = target.cuda()
                     predict = self.model.forward(obs)
                     loss = torch.nn.functional.mse_loss(predict, target)
                     self.optimizer.zero_grad()
@@ -215,14 +214,14 @@ class AgentDQN(AgentBase):
         targets = []
         for i in range(0, observations.shape[0], self.batch_size):
             batch_obs = observations[i:i+self.batch_size]
-            if self._use_cuda:
-                batch_obs = batch_obs.cuda()
-            target = expert.forward(batch_obs)
-            targets.append(target.cpu())  # take care GPU ram usage here
-        targets = torch.cat(targets, dim=0)
+            target = expert.get_action_raw(batch_obs)
+            targets.append(target)  # take care GPU ram usage here
+        targets = np.concatenate(targets, axis=0)
 
         # make dataloader
-        dataset = torch.utils.data.TensorDataset(observations, targets)
+        dataset = torch.utils.data.TensorDataset(
+            torch.from_numpy(observations),
+            torch.from_numpy(targets))
         dataloader = torch.utils.data.DataLoader(
             dataset,
             batch_size=self.batch_size,
@@ -238,10 +237,10 @@ class AgentDQN(AgentBase):
             targets = [targets]
             obs = self.env.reset()
             for step in range(self.dagger_explore_steps):
-                observations.append(obs)
+                observations.append(np.expand_dims(obs, 0))
 
                 # use expert's raw predict as target
-                raw = expert.get_action_raw(obs)
+                raw = expert.get_action_raw(np.expand_dims(obs, 0))
                 targets.append(raw)
 
                 # use self.model to make action
@@ -253,9 +252,11 @@ class AgentDQN(AgentBase):
                     obs = self.env.reset()
 
             # make data loader
-            targets = torch.cat(targets, dim=0)
-            observations = torch.cat(observations, dim=0)
-            dataset = torch.utils.data.TensorDataset(observations, targets)
+            observations = np.concatenate(observations, axis=0)
+            targets = np.concatenate(targets, axis=0)
+            dataset = torch.utils.data.TensorDataset(
+                torch.from_numpy(observations),
+                torch.from_numpy(targets))
             dataloader = torch.utils.data.DataLoader(
                 dataset,
                 batch_size=self.batch_size,
@@ -264,19 +265,26 @@ class AgentDQN(AgentBase):
             # fit again
             fit(dataloader, self.distil_epochs)
 
-    def get_experience(self, agent):
+    def get_experience(self):
         return self.replay_buffer.get_experience()
 
     @staticmethod
-    def jointly_make_action(self, observation, agents, agent_weights):
-        raw = self.jointly_get_action_raw(observation, agents, agent_weights)
+    def jointly_make_action(observation, agents, agent_weights):
+        raw = AgentDQN.jointly_get_action_raw(
+            observation, agents, agent_weights)
         return np.argmax(raw, -1)[0, 0]
 
-    @staticmethod
-    def jointly_get_action_raw(self, observation, agents, agent_weights):
-        # TODO: Parallization
-        raw = 0
-        for agent, weight in zip(agents, agent_weights):
-            raw += agent.get_action_raw(observation) * weight
+    # @staticmethod
+    # def jointly_get_action_raw(observation, agents, agent_weights):
+    #     # TODO: Parallization
+    #     raw = 0
+    #     for agent, weight in zip(agents, agent_weights):
+    #         raw += agent.get_action_raw(observation) * weight
 
-        return raw
+    #     return raw
+
+    @staticmethod
+    def get_fitness(agent1, agent2):
+        mean_reward1 = agent1.replay_buffer.get_mean_reward()
+        mean_reward2 = agent2.replay_buffer.get_mean_reward()
+        return mean_reward1 + mean_reward2
