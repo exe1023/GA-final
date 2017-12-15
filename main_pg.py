@@ -23,7 +23,8 @@ def parse():
 
 def run(args):
     #env = gym.make('CartPole-v0')
-    env = gym.make('MountainCar-v0')
+    #env = gym.make('MountainCar-v0')
+    env = gym.make('Pong-v0')
     solve = (195, 100) # we solve cartpole when getting reward of 195 over 100 episode
     agent = Agent_PG(args, env, solve)
     agent.train()

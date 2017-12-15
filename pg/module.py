@@ -24,7 +24,7 @@ class REINFORCE_ATARI(nn.Module):
         self.conv2 = nn.Conv2d(16, 32, kernel_size=4, stride=2)
         #self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
         #self.conv4 = nn.Conv2d(64, 64, kernel_size=3, stride=1)
-        self.fc = nn.Linear(2048, 128)
+        self.fc = nn.Linear(32 * 8 * 8, 128)
         self.head = nn.Linear(128, num_actions)
         
         self.relu = nn.ReLU()

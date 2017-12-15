@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 from agent_dir.agent import Agent
 from dqn.module import DQN
 from dqn.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
@@ -13,6 +12,9 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 import torch.optim as optim
 import torch.nn as nn
+
+from tensorboardX import SummaryWriter
+writer = SummaryWriter()
 
 use_cuda = torch.cuda.is_available()
 FloatTensor = torch.cuda.FloatTensor if use_cuda else torch.FloatTensor
@@ -217,7 +219,8 @@ class Agent_DQN(Agent):
                 # Perform one step of the optimization (on the target network)
                 if self.steps > self.learning_start and self.steps % self.train_freq == 0:
                     loss = self.update()
-                    self.reset_noise()
+                    if self.noise_linear:
+                        self.reset_noise()
                 
                 # update target network
                 if self.steps > self.learning_start and self.steps % self.target_update_freq == 0:
@@ -233,6 +236,7 @@ class Agent_DQN(Agent):
                 print('Episode: %d | Steps: %d/%d | Exploration: %f | Avg reward: %f | loss: %f | Episode Duration: %d'%
                         (self.episodes_done, self.steps, self.num_timesteps, self.exploration.value(self.steps), total_reward / self.display_freq, 
                         loss, episode_duration))
+                writer.add_scalar('reward', total_reward/self.display_freq, self.steps)
                 total_reward = 0
             
             self.episodes_done += 1
