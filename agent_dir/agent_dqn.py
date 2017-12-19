@@ -85,6 +85,7 @@ class AgentDQN(AgentBase):
         beta = min(beta, 1)
         replay = self.replay_buffer.sample(self.batch_size, beta=beta)
 
+        # pdb.set_trace()
         # prepare tensors
         tensor_replay = [torch.from_numpy(val) for val in replay[:-1]]
         if self._use_cuda:
@@ -127,7 +128,7 @@ class AgentDQN(AgentBase):
 
         return torch.mean(loss)
 
-    def train(self):
+    def train(self, callbacks=[]):
         # init target network
         target_q = copy.deepcopy(self.model)
 
@@ -153,10 +154,8 @@ class AgentDQN(AgentBase):
                     state0 = self.env.reset()
                     print('t = %d, r = %f, loss = %f, exp = %f'
                           % (self.t, episode_rewards[-1], loss, self.epsilon))
-                    # if self.log_file is not None:
-                    #     fp_log.write('{},{},{}\n'.format(self.t,
-                    #                                      episode_rewards[-1],
-                    #                                      loss))
+                    for callback in callbacks:
+                        callback(self, episode_rewards, loss)
                     episode_rewards.append(0)
                 else:
                     state0 = state1
