@@ -23,7 +23,7 @@ class AgentGRL():
                  agent_clf,
                  population_size=8,
                  n_generations=100,
-                 n_workers=-1):
+                 n_workers=1):
         self.base_agent = base_agent
         self.agent_clf = agent_clf
         self.n_generations = n_generations
@@ -35,10 +35,7 @@ class AgentGRL():
         # init number of generations
         self.gen = 0
 
-        if n_workers == -1:
-            self.n_workers = multiprocessing.cpu_count()
-        else:
-            self.n_workers = n_workers
+        self.n_workers = n_workers
 
     def train(self):
         """Train it!
@@ -56,16 +53,13 @@ class AgentGRL():
         """Mutate chromosomes in the population.
         """
         # it doesn't work
-        # multiprocessing.set_start_method('spawn')
-        # with multiprocessing.Pool(self.n_workers) as p:
-        #     for chrom in self.population:
-        #         p.apply_async(chrom.train, ())
+        multiprocessing.set_start_method('spawn')
+        with multiprocessing.Pool(self.n_workers) as p:
+            for chrom in self.population:
+                p.apply_async(chrom.train, ())
 
-        #         p.close()
-        #         p.join()
-
-        for chrom in self.population:
-            chrom.train()
+            p.close()
+            p.join()
 
     @staticmethod
     def _evaluate(parent):
