@@ -33,6 +33,8 @@ class AgentDQN(AgentBase):
             expert's prediction.
         dagger_explore_steps (int): Number of steps to explore in each dagger
             iterations.
+        save_path (str): Path to store model.
+        save_interval (int): Number of timesteps between saved models.
     """
     def __init__(self, env, model,
                  max_timesteps=50000,
@@ -48,7 +50,9 @@ class AgentDQN(AgentBase):
                  distil_dagger_iters=2,
                  distil_epochs=10,
                  dagger_explore_steps=500,
-                 log_file=None):
+                 log_file=None,
+                 save_path=None,
+                 save_interval=10000):
         self.t = 0
         self.env = env
         self.n_actions = self.env.action_space.n
@@ -65,6 +69,8 @@ class AgentDQN(AgentBase):
         self.distil_dagger_iters = distil_dagger_iters
         self.distil_epochs = distil_epochs
         self.dagger_explore_steps = dagger_explore_steps
+        self.save_path = save_path
+        self.save_interval = save_interval
 
         self.log_file = log_file
 
@@ -72,7 +78,6 @@ class AgentDQN(AgentBase):
         self._use_cuda = torch.cuda.is_available()
         self.optimizer = torch.optim.Adam(self.model.parameters(),
                                           lr=learning_rate)
-        self.loss = torch.nn.MSELoss(reduce=False)
 
         if self._use_cuda:
             self.model = self.model.cuda()
@@ -162,11 +167,15 @@ class AgentDQN(AgentBase):
 
             loss = self.update_model(target_q)
 
+            self.t += 1
+
             # update target network
             if self.t % self.target_network_update_period == 0:
                 target_q.load_state_dict(self.model.state_dict())
 
-            self.t += 1
+            if self.t % self.save_interval == 0:
+                if self.save_path is not None:
+                    self.save('{}-{}'.format(self.save_path, self.t))
 
     def make_action(self, observation, test=True):
         # decide if doing exploration
@@ -266,6 +275,13 @@ class AgentDQN(AgentBase):
 
     def get_experience(self):
         return self.replay_buffer.get_experience()
+
+    def save(self, filename):
+        torch.save({'t': self.t,
+                    'model': self.model.state_dict(),
+                    'optimizer': self.optimizer,
+                    'replay_buffer': self.replay_buffer},
+                   filename)
 
     @staticmethod
     def jointly_make_action(observation, agents, agent_weights):
