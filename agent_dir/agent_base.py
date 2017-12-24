@@ -7,6 +7,23 @@ class AgentBase:
     def __init__(self):
         pass
 
+    def set_state(self, state):
+        """Set model state, such number of timesteps. This method is used to
+        pass some state from parent to child.
+
+        Args:
+            state (dict): State to set.
+        """
+        pass
+
+    def get_state(self):
+        """Get model state, such number of timesteps. This method is used to
+        pass some state from parent to child.
+
+        Returns:
+            dict: state of the agent.
+        """
+
     def train(self):
         """Train!!
         """

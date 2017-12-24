@@ -46,9 +46,26 @@ class AgentGRL():
             self._mutate()
             parents = self._select()
             children = []
-            for parent in parents:
-                child = self._crossover(parent)
-                children.append(child)
+
+            # crossover
+            tmp_files = [tempfile.NamedTemporaryFile()
+                         for _ in range(len(self.population))]
+            ctx = multiprocessing.get_context('spawn')
+            with ctx.Pool(self.n_workers) as p:
+                for parent, tmp_file in zip(parents, tmp_files):
+                    p.apply_async(self._crossover, (parent, tmp_file.name))
+
+                p.close()
+                p.join()
+
+            children = [copy.deepcopy(self.base_agent)
+                        for _ in range(len(self.population))]
+            for child, tmp_file in zip(children, tmp_files):
+                child.load(tmp_file.name, model_only=False)
+                tmp_file.close()
+
+            self.population = children
+
             self.gen += 1
 
     def _mutate(self):
@@ -88,20 +105,21 @@ class AgentGRL():
         """
         parents = list(itertools.combinations(self.population, 2))
         fitnesses = list(map(self._evaluate, parents))
-        threshold = sorted(fitnesses)[-len(self.population)]
+        threshold = sorted(fitnesses)[len(self.population) - 1]
         selected = []
         for parent, fitness in zip(parents, fitnesses):
-            if fitness >= threshold:
+            if fitness >= threshold and len(selected) < len(self.population):
                 selected.append(parent)
 
         assert(len(selected) == len(self.population))
         return selected
 
-    def _crossover(self, parent):
+    def _crossover(self, parent, ckp_name):
         """Crossover parent and generate child.
 
-        Returns:
-            chrom: Child chromosome.
+        Args:
+            parent (Agent, Agent): Two-tuple of agents.
+            ckp_name (str): Name of checkpoint to save to.
         """
         # get experience from the parent
         p0_exp = parent[0].get_experience()
@@ -125,10 +143,14 @@ class AgentGRL():
 
         # init child
         child = copy.deepcopy(self.base_agent)
+        child.set_state(parent[0].get_state())
 
         # doing distillation
         print('start doing distillation')
         child.learn(hier_agent, x)
+
+        # save result to file ckp_name
+        child.save(ckp_name, model_only=False)
 
 
 class _HierarchicalAgent(AgentBase):

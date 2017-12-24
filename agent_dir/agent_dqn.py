@@ -47,8 +47,8 @@ class AgentDQN(AgentBase):
                  prioritized_replay_eps=1e-4,
                  prioritized_replay_alpha=0.9,
                  target_network_update_period=2000,
-                 distil_dagger_iters=2,
-                 distil_epochs=10,
+                 distil_dagger_iters=5,
+                 distil_epochs=3,
                  dagger_explore_steps=500,
                  log_file=None,
                  save_path=None,
@@ -81,6 +81,12 @@ class AgentDQN(AgentBase):
 
         if self._use_cuda:
             self.model = self.model.cuda()
+
+    def set_state(self, state):
+        self.t = state['t']
+
+    def get_state(self):
+        return {'t': self.t}
 
     def update_model(self, target_q):
         # sample from replay_buffer
