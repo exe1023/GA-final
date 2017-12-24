@@ -1,6 +1,7 @@
 import copy
 import itertools
 import multiprocessing
+import tempfile
 import numpy as np
 from .agent_base import AgentBase
 
@@ -41,6 +42,7 @@ class AgentGRL():
         """Train it!
         """
         while self.gen < self.n_generations:
+            print('Generation {}'.format(self.gen))
             self._mutate()
             parents = self._select()
             children = []
@@ -52,14 +54,20 @@ class AgentGRL():
     def _mutate(self):
         """Mutate chromosomes in the population.
         """
-        # it doesn't work
-        multiprocessing.set_start_method('spawn')
-        with multiprocessing.Pool(self.n_workers) as p:
-            for chrom in self.population:
-                p.apply_async(chrom.train, ())
+        # tmp files to store model
+        tmp_files = [tempfile.NamedTemporaryFile()
+                     for _ in range(len(self.population))]
+        with multiprocessing.get_context('spawn').Pool(self.n_workers) as p:
+            for chrom, tmp_file in zip(self.population, tmp_files):
+                p.apply_async(_chrom_train_wrapper, (chrom, tmp_file.name))
 
             p.close()
             p.join()
+
+        # load model from tmp files
+        for agent, tmp_file in zip(self.population, tmp_files):
+            agent.load(tmp_file.name, model_only=False)
+            tmp_file.close()
 
     @staticmethod
     def _evaluate(parent):
@@ -145,3 +153,8 @@ class _HierarchicalAgent(AgentBase):
         agent_proba = self.clf.predict_proba(observation)
         return type(self.agents[0]) \
             .jointly_get_action_raw(observation, self.agents, agent_proba)
+
+
+def _chrom_train_wrapper(chrom, ckp_name):
+    chrom.train()
+    chrom.save(ckp_name, model_only=False)

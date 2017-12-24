@@ -49,6 +49,27 @@ class AgentBase:
         """
         pass
 
+    def save(self, ckp_name, model_only=True):
+        """Save the model and some information like replay buffer to file
+        `ckp_name`.
+
+        Args:
+            ckp_name (str): Name of the saved file.
+            model_only (bool): Whether or not only save model, but any other
+                information.
+        """
+        pass
+
+    def load(self, ckp_name, model_only=True):
+        """Load the model and some information like replay buffer.
+
+        Args:
+            ckp_name (str): Name of the file to load.
+            model_only (bool): Whether or not only load model, but any other
+                information.
+        """
+        pass
+
     @staticmethod
     def jointly_make_action(observation, agents, agent_weights):
         """Make action according to agents the jointly.

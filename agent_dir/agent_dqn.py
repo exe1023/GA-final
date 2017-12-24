@@ -42,7 +42,7 @@ class AgentDQN(AgentBase):
                  batch_size=32,
                  learning_rate=1e-3,
                  exploration_steps=5000,
-                 exploration_final_eps=0.1,
+                 exploration_final_eps=0.05,
                  buffer_size=50000,
                  prioritized_replay_eps=1e-4,
                  prioritized_replay_alpha=0.9,
@@ -276,12 +276,24 @@ class AgentDQN(AgentBase):
     def get_experience(self):
         return self.replay_buffer.get_experience()
 
-    def save(self, filename):
-        torch.save({'t': self.t,
-                    'model': self.model.state_dict(),
-                    'optimizer': self.optimizer,
-                    'replay_buffer': self.replay_buffer},
-                   filename)
+    def save(self, ckp_name, model_only):
+        if model_only:
+            torch.save({'model': self.model.state_dict()},
+                       ckp_name)
+        else:
+            torch.save({'t': self.t,
+                        'model': self.model.state_dict(),
+                        'optimizer': self.optimizer.state_dict(),
+                        'replay_buffer': self.replay_buffer},
+                       ckp_name)
+
+    def load(self, ckp_name, model_only=True):
+        ckp = torch.load(ckp_name)
+        self.model.load_state_dict(ckp['model'])
+        if not model_only:
+            self.t = ckp['t']
+            self.optimizer.load_state_dict(ckp['optimizer'])
+            self.replay_buffer = ckp['replay_buffer']
 
     @staticmethod
     def jointly_make_action(observation, agents, agent_weights):
