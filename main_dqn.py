@@ -4,15 +4,7 @@ import sys
 import traceback
 from agent_dir.agent_dqn import AgentDQN
 from utils.environment import wrap_env
-
-
-class CallbackLog:
-    def __init__(self, filename):
-        self._fp = open(filename, 'w', buffering=1)
-
-    def on_episode_end(self, model, rewards, loss):
-        self._fp.write('{},{},{}\n'
-                       .format(model.t, rewards[-1], loss))
+from utils.callbacks import CallbackLog
 
 
 def main(args):
@@ -27,8 +19,9 @@ def main(args):
                          env.action_space.n)
     agent_dqn = AgentDQN(env, value_net,
                          max_timesteps=1000000,
-                         exploration_steps=10000,
-                         buffer_size=10000)
+                         exploration_steps=25000,
+                         buffer_size=10000,
+                         save_path=args.save_path)
     callback_log = CallbackLog(args.log_file)
     agent_dqn.train([callback_log.on_episode_end])
 
@@ -39,6 +32,7 @@ def parse_args():
                         help='Environment name.')
     parser.add_argument('--population_size', type=int, default=8)
     parser.add_argument('--log_file', type=str, default='log-dqn.txt')
+    parser.add_argument('--save_path', type=str, default=None)
     args = parser.parse_args()
     return args
 
