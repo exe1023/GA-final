@@ -79,6 +79,8 @@ class AgentDQN(AgentBase):
         self.optimizer = torch.optim.Adam(self.model.parameters(),
                                           lr=learning_rate)
 
+        self.episode_rewards = [0]
+
         if self._use_cuda:
             self.model = self.model.cuda()
 
@@ -148,7 +150,6 @@ class AgentDQN(AgentBase):
 
         # log statics
         loss = 0
-        episode_rewards = [0]
 
         for i in range(self.max_timesteps):
             # play
@@ -158,16 +159,17 @@ class AgentDQN(AgentBase):
                 self.replay_buffer.add(state0, action,
                                        float(reward), state1, float(done))
                 # accumulate episode reward
-                episode_rewards[-1] += reward
+                self.episode_rewards[-1] += reward
 
                 # update previous state and log
                 if done:
                     state0 = self.env.reset()
                     print('t = %d, r = %f, loss = %f, exp = %f'
-                          % (self.t, episode_rewards[-1], loss, self.epsilon))
+                          % (self.t, self.episode_rewards[-1],
+                             loss, self.epsilon))
                     for callback in callbacks:
-                        callback(self, episode_rewards, loss)
-                    episode_rewards.append(0)
+                        callback(self, self.episode_rewards, loss)
+                    self.episode_rewards.append(0)
                 else:
                     state0 = state1
 
@@ -290,7 +292,8 @@ class AgentDQN(AgentBase):
             torch.save({'t': self.t,
                         'model': self.model.state_dict(),
                         'optimizer': self.optimizer.state_dict(),
-                        'replay_buffer': self.replay_buffer},
+                        'replay_buffer': self.replay_buffer,
+                        'episode_rewards': self.episode_rewards},
                        ckp_name)
 
     def load(self, ckp_name, model_only=True):
@@ -300,6 +303,10 @@ class AgentDQN(AgentBase):
             self.t = ckp['t']
             self.optimizer.load_state_dict(ckp['optimizer'])
             self.replay_buffer = ckp['replay_buffer']
+            self.episode_rewards = ckp['episode_rewards']
+
+    def get_mean_reward(self):
+        return sum(self.episode_rewards) / len(self.episode_rewards)
 
     @staticmethod
     def jointly_make_action(observation, agents, agent_weights):
@@ -318,6 +325,6 @@ class AgentDQN(AgentBase):
 
     @staticmethod
     def get_fitness(agent1, agent2):
-        mean_reward1 = agent1.replay_buffer.get_mean_reward()
-        mean_reward2 = agent2.replay_buffer.get_mean_reward()
+        mean_reward1 = agent1.get_mean_reward()
+        mean_reward2 = agent2.get_mean_reward()
         return mean_reward1 + mean_reward2
