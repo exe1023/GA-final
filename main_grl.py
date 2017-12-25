@@ -24,12 +24,14 @@ def main(args):
     clf = Classifier(clf_net, max_epochs=5)
 
     agent_dqn = AgentDQN(env, value_net,
-                         max_timesteps=100,
-                         exploration_steps=10,
-                         buffer_size=100)
+                         max_timesteps=args.gen_timesteps,
+                         exploration_steps=args.exploration_steps,
+                         buffer_size=5000)
     agent_grl = AgentGRL(agent_dqn, clf,
                          population_size=args.population_size,
-                         n_workers=4)
+                         n_workers=args.n_workers,
+                         log_dir=args.log_dir,
+                         ckp_dir=args.ckp_dir)
 
     agent_grl.train()
 
@@ -39,6 +41,14 @@ def parse_args():
     parser.add_argument('--env_name', type=str, default='Pong-v0',
                         help='Environment name.')
     parser.add_argument('--population_size', type=int, default=8)
+    parser.add_argument('--gen_timesteps', type=int, default=10000)
+    parser.add_argument('--n_workers', type=int, default=1)
+    parser.add_argument('--log_dir', type=str, default=None,
+                        help='Directory to save training log of generations.')
+    parser.add_argument('--ckp_dir', type=str, default=None,
+                        help='Directory to save checkpoint of generations.')
+    parser.add_argument('--exploration_steps', type=int, default=25000,
+                        help='Number of exploration steps for DQN to do.')
     args = parser.parse_args()
     return args
 

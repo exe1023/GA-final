@@ -1,9 +1,14 @@
 import copy
 import itertools
 import multiprocessing
+import os
+import sys
 import tempfile
+import traceback
 import numpy as np
 from .agent_base import AgentBase
+from utils.callbacks import CallbackLog
+import pdb
 
 
 class AgentGRL():
@@ -18,13 +23,21 @@ class AgentGRL():
         use_cuda (bool): Wheather or not use CUDA (GPU).
         n_workers (int): Number of threads to use. If -1, then use the
             number of cpu.
+        ckp_dir (str): The directory where checkpoints of agents in
+            generations will be saved to. If set to None, agents checkpoints
+            will be not saved.
+        log_dir (str): The directory where log of generations will be saved
+            to. If set to None, log will not be saved.
     """
+
     def __init__(self,
                  base_agent,
                  agent_clf,
                  population_size=8,
                  n_generations=100,
-                 n_workers=1):
+                 n_workers=1,
+                 ckp_dir=None,
+                 log_dir=None):
         self.base_agent = base_agent
         self.agent_clf = agent_clf
         self.n_generations = n_generations
@@ -37,6 +50,8 @@ class AgentGRL():
         self.gen = 0
 
         self.n_workers = n_workers
+        self.ckp_dir = ckp_dir
+        self.log_dir = log_dir
 
     def train(self):
         """Train it!
@@ -74,17 +89,35 @@ class AgentGRL():
         # tmp files to store model
         tmp_files = [tempfile.NamedTemporaryFile()
                      for _ in range(len(self.population))]
+
+        if self.log_dir is not None:
+            log_files = [os.path.join(self.log_dir,
+                                      'gen-%d-%d.log' % (self.gen, i))
+                         for i in range(len(self.population))]
+        else:
+            log_files = [None
+                         for i in range(len(self.population))]
+
         with multiprocessing.get_context('spawn').Pool(self.n_workers) as p:
-            for chrom, tmp_file in zip(self.population, tmp_files):
-                p.apply_async(_chrom_train_wrapper, (chrom, tmp_file.name))
+            for chrom, tmp_file, log_file in zip(self.population,
+                                                 tmp_files,
+                                                 log_files):
+                p.apply_async(_chrom_train_wrapper,
+                              (chrom, tmp_file.name, log_file))
 
             p.close()
             p.join()
 
         # load model from tmp files
-        for agent, tmp_file in zip(self.population, tmp_files):
-            agent.load(tmp_file.name, model_only=False)
+        for chrom, tmp_file in zip(self.population, tmp_files):
+            chrom.load(tmp_file.name, model_only=False)
             tmp_file.close()
+
+        # save model if self.chp_dir is specified
+        if self.ckp_dir is not None:
+            for i, chrom in enumerate(self.population):
+                chrom.save(os.path.join(self.ckp_dir,
+                                        'gen-%d-%d.ckp' % (self.gen, i)))
 
     @staticmethod
     def _evaluate(parent):
@@ -105,7 +138,7 @@ class AgentGRL():
         """
         parents = list(itertools.combinations(self.population, 2))
         fitnesses = list(map(self._evaluate, parents))
-        threshold = sorted(fitnesses)[len(self.population) - 1]
+        threshold = sorted(fitnesses)[-len(self.population)]
         selected = []
         for parent, fitness in zip(parents, fitnesses):
             if fitness >= threshold and len(selected) < len(self.population):
@@ -161,6 +194,7 @@ class _HierarchicalAgent(AgentBase):
             which agent to use.
         agents (tuple of Agent): Agents.
     """
+
     def __init__(self, clf, agents):
         super(_HierarchicalAgent, self).__init__()
         self.clf = clf
@@ -177,6 +211,14 @@ class _HierarchicalAgent(AgentBase):
             .jointly_get_action_raw(observation, self.agents, agent_proba)
 
 
-def _chrom_train_wrapper(chrom, ckp_name):
-    chrom.train()
-    chrom.save(ckp_name, model_only=False)
+def _chrom_train_wrapper(chrom, ckp_name, log_file):
+    try:
+        if log_file is not None:
+            callbacks = [CallbackLog(log_file).on_episode_end]
+        else:
+            callbacks = []
+        chrom.train(callbacks)
+        chrom.save(ckp_name, model_only=False)
+    except BaseException as e:
+        print('Error occured in subproces!', file=sys.stderr)
+        traceback.print_exc()

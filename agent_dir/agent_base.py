@@ -24,7 +24,7 @@ class AgentBase:
             dict: state of the agent.
         """
 
-    def train(self):
+    def train(self, callbacks=[]):
         """Train!!
         """
 
