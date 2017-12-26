@@ -43,6 +43,7 @@ def fitness(env, model, weights, seed):
         done = False
         while(not done):
             action = model.get_action(state)
+            #action = model.get_action(prepro(state))
             state, reward, done, info = env.step(action)
             total_reward += reward
     return total_reward / num_run
@@ -53,6 +54,7 @@ class Agent_ES:
         # environment
         self.env = env
         self.solve = solve
+        self.args = args
         # model
         '''game = Game(env_name=args.env_name,
                     input_size=80*80,
@@ -60,25 +62,33 @@ class Agent_ES:
                     time_factor=0,
                     layers=[32, 16],
                     activation='softmax',
-                    noise_bias=0.0,
+                    noise_bias=1,
                     output_noise=[False, False, False])
         '''
+        
         game = Game(env_name=args.env_name,
-                    input_size=6,
+                    input_size=env.observation_space.shape[0],
                     output_size=env.action_space.n,
                     time_factor=0,
                     layers=[64, 32],
                     activation='softmax',
                     noise_bias=1,
                     output_noise=[False, False, False])
-
+        
         self.model = Model(game)
         self.model.set_env(env)
         # solver 
         self.num_params = self.model.param_count
+        print('params:', self.num_params)
         self.npop = args.npop
-        self.solver = es.CMAES(self.num_params,
-                                popsize=args.npop)
+        if args.solver == 'cmaes':
+            self.solver = es.CMAES(self.num_params,
+                                    popsize=args.npop)
+        elif args.solver == 'openes':
+            self.solver = es.OpenES(self.num_params,
+                                    popsize=args.npop)
+
+        
         # other settings
         self.writer = SummaryWriter()
         self.seeder = Seeder()
@@ -106,20 +116,24 @@ class Agent_ES:
         return seed
     
     def train(self):
+        print('Start Training')
         for i_timestep in range(self.num_timesteps):
             solutions = self.solver.ask()
             seeds = self.seeder.next_batch(self.npop)
             multiple_res = []
             rewards = []
-
-            with multiprocessing.Pool(processes=self.n_workers) as p:
+            
+            if self.args.parallel:
+                with multiprocessing.Pool(processes=self.n_workers) as p:
+                    for weight, seed in zip(solutions, seeds):
+                        res = p.apply_async(fitness, (self.env, self.model, weight, seed))
+                        multiple_res.append(res)
+                    p.close()
+                    p.join()
+                rewards = [res.get() for res in multiple_res]
+            else:
                 for weight, seed in zip(solutions, seeds):
-                    res = p.apply_async(fitness, (self.env, self.model, weight, seed))
-                    multiple_res.append(res)
-                p.close()
-                p.join()
-            rewards = [res.get() for res in multiple_res]
-            #print(rewards)
+                    rewards.append(fitness(self.env, self.model, weight, seed))
             rewards = np.array(rewards)
             
             self.solver.tell(rewards)
