@@ -1,4 +1,5 @@
 import numpy as np
+#import cupy as np
 import random
 # I implemented Schmidhuber's "Compressed Network Search" but didn't use it.
 # ndded for the compress/decompress functions.
@@ -109,7 +110,7 @@ class Model:
         for shape in self.shapes:
             self.weight.append(np.zeros(shape=shape))
             self.bias.append(np.zeros(shape=shape[1]))
-            self.param_count += (np.product(shape) + shape[1])
+            self.param_count += (int(np.prod(np.array(shape))) + shape[1])
             if self.output_noise[idx]:
                 self.param_count += shape[1]
             log_std = np.zeros(shape=shape[1])
@@ -156,7 +157,7 @@ class Model:
         for i in range(len(self.shapes)):
             w_shape = self.shapes[i]
             b_shape = self.shapes[i][1]
-            s_w = np.product(w_shape)
+            s_w = int(np.prod(np.array(w_shape)))
             s = s_w + b_shape
             chunk = np.array(model_params[pointer:pointer+s])
             self.weight[i] = chunk[:s_w].reshape(w_shape)
