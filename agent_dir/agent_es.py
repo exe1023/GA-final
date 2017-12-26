@@ -4,6 +4,7 @@ from es.game_config import Game
 from tensorboardX import SummaryWriter
 import numpy as np
 import scipy
+from tqdm import tqdm
 
 def prepro(I):
     """ prepro 210x160x3 uint8 frame into 6400 (80x80) 1D float vector """
@@ -21,20 +22,31 @@ class Agent_ES:
         self.env = env
         self.solve = solve
         # model
-        game = Game(env_name=args.env_name,
+        '''game = Game(env_name=args.env_name,
                     input_size=80*80,
+                    output_size=env.action_space.n,
+                    time_factor=0,
+                    layers=[32, 16],
+                    activation='softmax',
+                    noise_bias=0.0,
+                    output_noise=[False, False, False])
+        '''
+        game = Game(env_name=args.env_name,
+                    input_size=6,
                     output_size=env.action_space.n,
                     time_factor=0,
                     layers=[64, 32],
                     activation='softmax',
-                    noise_bias=0.0,
+                    noise_bias=1,
                     output_noise=[False, False, False])
+
         self.model = Model(game)
         self.model.set_env(env)
         # solver 
         self.num_params = self.model.param_count
         self.npop = args.npop
-        self.solver = es.OpenES(self.num_params)
+        self.solver = es.CMAES(self.num_params,
+                                popsize=args.npop)
         # logger and other settings
         self.writer = SummaryWriter()
         self.num_timesteps = args.num_timesteps
@@ -42,13 +54,13 @@ class Agent_ES:
     
     def fitness(self, weights):
         total_reward = 0.0
-        num_run = 10
+        num_run = 5
         self.model.set_model_params(weights)
         for t in range(num_run):
             state = self.env.reset()
             done = False
             while(not done):
-                action = self.model.get_action(prepro(state))
+                action = self.model.get_action(state)
             
                 state, reward, done, info = self.env.step(action)
                 total_reward += reward
@@ -60,18 +72,19 @@ class Agent_ES:
             rewards = []
             for weight in solutions:
                 reward = self.fitness(weight)
+                rewards.append(reward)
             rewards = np.array(rewards)
             
             self.solver.tell(rewards)
 
-            model_params, best, curr_best = self.solver.result()
+            model_params, best, curr_best, _ = self.solver.result()
             self.model.set_model_params(np.array(model_params).round(4))
 
 
             self.writer.add_scalar('best reward', np.max(rewards), i_timestep)
             self.writer.add_scalar('mean reward', np.mean(rewards), i_timestep)
             if i_timestep % self.display_freq == 0:
-                print('Step: %d | Best Reward %f | Avg Reward %f '%
+                print('Generation: %d | Best Reward %f | Avg Reward %f '%
                        (i_timestep, np.max(rewards), np.mean(rewards)))
             
             if np.max(rewards) > self.solve[0]:
