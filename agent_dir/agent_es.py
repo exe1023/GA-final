@@ -28,9 +28,6 @@ class Seeder:
         result = np.random.randint(self.limit, size=batch_size).tolist()
         return result
 
-def test(env, model, weights, seed):
-    return seed
-
 def fitness(env, model, weights, seed):
     total_reward = 0.0
     num_run = 5
@@ -83,7 +80,8 @@ class Agent_ES:
         self.npop = args.npop
         if args.solver == 'cmaes':
             self.solver = es.CMAES(self.num_params,
-                                    popsize=args.npop)
+                                    popsize=args.npop,
+                                    sigma_init=0.2)
         elif args.solver == 'openes':
             self.solver = es.OpenES(self.num_params,
                                     popsize=args.npop)
@@ -112,9 +110,23 @@ class Agent_ES:
                 total_reward += reward
         return total_reward / num_run
 
-    def test(self, weights, seed):
-        return seed
+    def load(self, path='es.cpt'):
+        model_params = np.load(path)
+        self.model.set_model_params(model_params)
     
+    def test_play(self):
+        while True:
+            state = self.env.reset()
+            self.env.render()
+            done = False
+            rewards = 0
+            while(not done):
+                action = self.model.get_action(state)
+                state, reward, done, info = self.env.step(action)
+                self.env.render()
+                rewards += reward
+            print(rewards)
+
     def train(self):
         print('Start Training')
         for i_timestep in range(self.num_timesteps):
@@ -141,12 +153,15 @@ class Agent_ES:
             model_params, best, curr_best, _ = self.solver.result()
             self.model.set_model_params(np.array(model_params).round(4))
 
-
             self.writer.add_scalar('best reward', np.max(rewards), i_timestep)
             self.writer.add_scalar('mean reward', np.mean(rewards), i_timestep)
             if i_timestep % self.display_freq == 0:
                 print('Generation: %d | Best Reward %f | Avg Reward %f '%
                        (i_timestep, np.max(rewards), np.mean(rewards)))
+            
+            if i_timestep % self.args.save_freq == 0:
+                print('save model')
+                np.save('es.cpt', np.array(model_params).round(4))
             
             if np.max(rewards) > self.solve[0]:
                 print('Solve the environment. Stop training')

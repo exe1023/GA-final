@@ -26,8 +26,8 @@ class Agent_PG:
         self.solve = solve
         # model 
         self.num_actions = self.env.action_space.n
-        self.model = REINFORCE_ATARI(1, self.num_actions)
-        #self.model = REINFORCE(6400, self.num_actions)
+        #self.model = REINFORCE_ATARI(1, self.num_actions)
+        self.model = REINFORCE(env.observation_space.shape[0], self.num_actions)
         self.model = self.model.cuda() if use_cuda else self.model
         # training settings
         self.batch_size = args.batch_size # not used in reinforce
@@ -98,7 +98,9 @@ class Agent_PG:
         # accumulate reward for testing solve criterion
         solve_reward = 0
         for i_episode in range(self.num_timesteps):
-            state = torch.from_numpy(prepro(self.env.reset())).unsqueeze(0)
+            state = self.env.reset()
+            #state = torch.from_numpy(prepro(state)).unsqueeze(0)
+            state = torch.Tensor(state).unsqueeze(0)
             prev_state = state
             entropies = []
             log_probs = []
@@ -112,8 +114,9 @@ class Agent_PG:
                 entropies.append(entropy)
                 log_probs.append(log_prob)
                 rewards.append(reward)
-                next_state = torch.from_numpy(prepro(next_state)).unsqueeze(0)
-                state = next_state - prev_state
+                #next_state = torch.from_numpy(prepro(next_state)).unsqueeze(0)
+                next_state = torch.Tensor(next_state).unsqueeze(0)
+                #state = next_state - prev_state
                 prev_state = next_state
                 
                 total_reward += reward
