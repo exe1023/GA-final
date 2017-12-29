@@ -11,8 +11,8 @@ class Space:
 class MKTrap:
     def __init__(self, m=20, k=5):
         self.problem_size = m * k
-        self.m = 20
-        self.k = 5
+        self.m = m
+        self.k = k
         
         self.observation_space = Space(n=None, shape=(self.problem_size, ))
         self.action_space = Space(n=2, shape=None)
@@ -22,7 +22,7 @@ class MKTrap:
     def reset(self):
         self.traps = random.sample(range(self.problem_size), 
                                    self.problem_size)
-        self.state = [-1 for _ in range(self.problem_size)]
+        self.state = [2 for _ in range(self.problem_size)]
         self.idx = 0
         self.done = False
         return self.state

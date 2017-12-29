@@ -82,7 +82,7 @@ class Agent_ES:
         if args.solver == 'cmaes':
             self.solver = es.CMAES(self.num_params,
                                     popsize=args.npop,
-                                    sigma_init=2)
+                                    sigma_init=0.2)
         elif args.solver == 'openes':
             self.solver = es.OpenES(self.num_params,
                                     popsize=args.npop)
