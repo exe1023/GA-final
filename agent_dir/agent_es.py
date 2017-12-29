@@ -30,6 +30,7 @@ class Seeder:
 
 def fitness(env, model, weights, seed):
     total_reward = 0.0
+    #num_run = 1
     num_run = 5
     model.set_model_params(weights)
         
@@ -81,7 +82,7 @@ class Agent_ES:
         if args.solver == 'cmaes':
             self.solver = es.CMAES(self.num_params,
                                     popsize=args.npop,
-                                    sigma_init=0.2)
+                                    sigma_init=2)
         elif args.solver == 'openes':
             self.solver = es.OpenES(self.num_params,
                                     popsize=args.npop)

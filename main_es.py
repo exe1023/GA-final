@@ -2,6 +2,7 @@ import argparse
 from agent_dir.agent_es import Agent_ES
 from atari_wrapper import make_wrap_atari
 import gym
+from custom_envs import trap
 
 def parse():
     parser = argparse.ArgumentParser(description='ES RL')
@@ -25,7 +26,8 @@ def run(args):
     #env = gym.make('Acrobot-v1')
     #env = gym.make('MountainCar-v0')
     #env = gym.make('BipedalWalker-v2')
-    env = gym.make('LunarLander-v2')
+    #env = gym.make('LunarLander-v2')
+    env = trap.MKTrap(m=20, k=5)
     solve = (200, 100) # we solve cartpole when getting reward of 195 over 100 episode
     agent = Agent_ES(args, env, solve)
     if args.test:
