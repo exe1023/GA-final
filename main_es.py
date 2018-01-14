@@ -31,7 +31,7 @@ def run(args):
     solve = (200, 100) # we solve cartpole when getting reward of 195 over 100 episode
     agent = Agent_ES(args, env, solve)
     if args.test:
-        agent.load('es.cpt.npy')
+        agent.load('es.final.npy')
         agent.test_play()
     else:
         agent.train()

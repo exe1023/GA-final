@@ -12,6 +12,7 @@ def parse():
     parser.add_argument('--env_id',type=str,default='BreakoutNoFrameskip-v4' ,help='enviornment name')
     
     # DQN model architecture
+    parser.add_argument('--atari',type=int,default=1,help='use atari model?')
     parser.add_argument('--prioritized',action='store_true',help='whether to use prioritized replay')
     parser.add_argument('--dueling',action='store_true',help='whether to use dueling network')
     parser.add_argument('--double',action='store_true',help='whether to use double q network')
@@ -32,6 +33,7 @@ def run(args):
     if args.train:
         from agent_dir.agent_dqn import Agent_DQN
         env = make_wrap_atari(args.env_id, clip_rewards=True)
+        #env = gym.make('LunarLander-v2')
         agent = Agent_DQN(args, env)
         if args.n_steps > 1:
             agent.nsteps_train()

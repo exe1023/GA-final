@@ -68,7 +68,7 @@ class Agent_ES:
                     input_size=env.observation_space.shape[0],
                     output_size=env.action_space.n,
                     time_factor=0,
-                    layers=[64, 32],
+                    layers=[128, 64],
                     activation='softmax',
                     noise_bias=1,
                     output_noise=[False, False, False])
@@ -86,7 +86,9 @@ class Agent_ES:
         elif args.solver == 'openes':
             self.solver = es.OpenES(self.num_params,
                                     popsize=args.npop)
-
+        elif args.solver == 'pepg':
+            self.solver = es.PEPG(self.num_params,
+                                  popsize=args.npop)
         
         # other settings
         self.writer = SummaryWriter()
@@ -94,22 +96,6 @@ class Agent_ES:
         self.num_timesteps = args.num_timesteps
         self.display_freq = args.display_freq
         self.n_workers = multiprocessing.cpu_count()
-    
-    def fitness(self, weights, seed):
-        total_reward = 0.0
-        num_run = 5
-        self.model.set_model_params(weights)
-        
-        self.env.seed(seed)
-
-        for t in range(num_run):
-            state = self.env.reset()
-            done = False
-            while(not done):
-                action = self.model.get_action(state)
-                state, reward, done, info = self.env.step(action)
-                total_reward += reward
-        return total_reward / num_run
 
     def load(self, path='es.cpt'):
         model_params = np.load(path)

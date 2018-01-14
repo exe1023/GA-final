@@ -2,6 +2,7 @@ import argparse
 from agent_dir.agent_pg import Agent_PG
 from atari_wrapper import make_wrap_atari
 import gym
+from custom_envs import trap
 
 def parse():
     parser = argparse.ArgumentParser(description="MLDS&ADL HW3")
@@ -23,7 +24,8 @@ def parse():
 
 def run(args):
     #env = gym.make('CartPole-v0')
-    env = gym.make('LunarLander-v2')
+    #env = gym.make('LunarLander-v2')
+    env = trap.MKTrap(m=20, k=5)
     #env = gym.make('Pong-v0')
     solve = (195, 100) # we solve cartpole when getting reward of 195 over 100 episode
     agent = Agent_PG(args, env, solve)

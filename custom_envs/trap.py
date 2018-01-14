@@ -19,21 +19,24 @@ class MKTrap:
         # what is the correct BB?
         self.correct = [random.randint(0, 1) for _ in range(k)]
 
-        self.observation_space = Space(n=None, shape=(self.problem_size, ))
+        self.observation_space = Space(n=None, shape=(self.problem_size * 2, ))
         self.action_space = Space(n=2, shape=None)
         print('Correct BB:', self.correct)
         print('Best Reward:', 2 * m)
+        print('Traps:')
+        for i in range(0, self.problem_size, self.k):
+            print(sorted(self.traps[i: i+self.k]))
 
     
     def reset(self):
-        self.state = [2 for _ in range(self.problem_size)]
+        self.state = [0 for _ in range(self.problem_size * 2)]
         self.idx = 0
         self.done = False
         return self.state
 
     def step(self, action):
         assert action in [0, 1]
-        self.state[self.idx] = action
+        self.state[self.idx + action * self.problem_size] = 1
         self.idx += 1
         
         self.done = (self.idx >= self.problem_size)
@@ -43,12 +46,15 @@ class MKTrap:
         return self.state, self.reward(), self.done, info
 
     def seed(self, seed):
+        '''
+        No randomness in this environement
+        '''
         return seed 
 
     def reward(self):
         '''
-        The best BB is 111...1 and its reward is 2
-        The deceptive BB is 000...0 and its reward is 1
+        Reward of the correct BB is 2
+        Reward of the deceptive BB is 1
         Reward of other BBs is (# of incorrect) * (1/k)
         '''
         if not self.done:
@@ -59,6 +65,9 @@ class MKTrap:
             trap = sorted(self.traps[i: i + self.k])
             num_fail = 0
             for i, t in enumerate(trap):
-                num_fail += 1 if self.state[t] != self.correct[i] else 0
+                if self.correct[i] == 1:
+                    num_fail += 1 if self.state[t] == 1 else 0
+                else:
+                    num_fail += 1 if self.state[t] == 0 else 0
             reward += 2 if num_fail == 0 else num_fail * (1/self.k)
         return reward

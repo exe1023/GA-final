@@ -44,8 +44,48 @@ class NoisyLinear(nn.Module):
         else:
             return F.linear(input, self.weight_mu, self.bias_mu)
 
+class DQN_Simple(nn.Module):
+    def __init__(self, input_dim, 
+                 num_actions,
+                 dueling=False,
+                 noise_linear=False):
+        super(DQN_Simple, self).__init__()
+        self.dueling = dueling
+        linear = nn.Linear
+        if noise_linear:
+            linear = NoisyLinear
+            
+        self.fc1 = linear(input_dim, 128)
+        self.fc2 = linear(128, 64)
 
-class DQN(nn.Module):
+        if self.dueling:
+            self.fc_v = linear(64, 1)
+            self.fc_As = linear(64, num_actions)
+        else:
+            self.fc_head = linear(64, num_actions)
+        
+        self.relu = nn.ReLU()
+        self.lrelu = nn.LeakyReLU(0.01)
+
+
+    def forward(self, x):
+        x = self.lrelu(self.fc1(x))
+        x = self.lrelu(self.fc2(x))
+        if self.dueling:
+            v = self.fc_v(x)
+            As = self.fc_As(x)
+            q = v.expand_as(As) + (As - As.mean(1, keepdim=True).expand_as(As))
+        else:
+            q = self.fc_head(x)
+        return q
+
+    def reset_noise(self):
+        for name, module in self.named_children():
+            if 'fc' in name:
+                module.reset_noise()
+
+
+class DQN_Atari(nn.Module):
     def __init__(self, channels, 
                  num_actions,
                  dueling=False,

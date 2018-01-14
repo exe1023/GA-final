@@ -1,5 +1,4 @@
-from agent_dir.agent import Agent
-from dqn.module import DQN
+from dqn.module import DQN_Atari, DQN_Simple
 from dqn.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
 from dqn.schedule import LinearSchedule
 import random
@@ -26,8 +25,9 @@ Tensor = FloatTensor
 def MSELoss(input, target):
    return (input.squeeze() - target.squeeze()) ** 2
 
-class Agent_DQN(Agent):
+class Agent_DQN:
     def __init__(self, args, env):
+        self.args = args
         self.env = env
         self.input_channels = 3 if 'SpaceInvaders' in args.env_id else 4
         self.num_actions = self.env.action_space.n
@@ -53,14 +53,21 @@ class Agent_DQN(Agent):
         else:
             self.memory = ReplayBuffer(10000)
             self.criterion = nn.MSELoss()
-        
+       
+        if args.atari:
+            DQN = DQN_Atari
+            input_feature = self.input_channels
+        else:
+            DQN = DQN_Simple
+            input_feature = env.observation_space.shape[0]
+
         # build target, online network
-        self.target_net = DQN(self.input_channels, 
+        self.target_net = DQN(input_feature, 
                               self.num_actions,
                               dueling=args.dueling,
                               noise_linear=args.noise_linear)
         self.target_net = self.target_net.cuda() if use_cuda else self.target_net
-        self.online_net = DQN(self.input_channels, 
+        self.online_net = DQN(input_feature, 
                               self.num_actions,
                               dueling=args.dueling,
                               noise_linear=args.noise_linear)
@@ -183,6 +190,15 @@ class Agent_DQN(Agent):
 
         return loss.data[0]
 
+    def process_state(self, state):
+        state = np.array(state)
+        if self.args.atari:
+            # map shape: (84,84,4) --> (1,4,84,84)
+            state = torch.from_numpy(state).permute(2,0,1).unsqueeze(0)
+        else:
+            state = torch.Tensor(state).unsqueeze(0)
+        return state.cuda() if use_cuda else state
+
     def train(self):
         total_reward = 0
         loss = 0
@@ -191,10 +207,8 @@ class Agent_DQN(Agent):
         while(True):
             if self.noise_linear:
                 self.reset_noise()
-            state = np.array(self.env.reset())
-            # map shape: (84,84,4) --> (1,4,84,84)
-            state = torch.from_numpy(state).permute(2,0,1).unsqueeze(0)
-            state = state.cuda() if use_cuda else state
+
+            state = self.process_state(self.env.reset())
             done = False
             episode_duration = 0
             while(not done):
@@ -205,8 +219,7 @@ class Agent_DQN(Agent):
                 reward = Tensor([reward])
 
                 # process new state 
-                next_state = torch.from_numpy(np.array(next_state)).permute(2,0,1).unsqueeze(0)
-                next_state = next_state.cuda() if use_cuda else next_state
+                next_state = self.process_state(next_state)
                 if done:
                     next_state = None
                 
@@ -250,26 +263,27 @@ class Agent_DQN(Agent):
         '''
         total_reward = 0
         loss = 0
+        # set training mode
+        self.online_net.train()
         while(True):
+            if self.noise_linear:
+                self.reset_noise()
             state_buffer = deque() # store states for future use
             action_buffer = deque() # store actions for future use
             reward_buffer = deque() # store rewards for future use
             nstep_reward = 0 # calculate n-step discounted reward
-            state = self.env.reset()
-            # map shape: (84,84,4) --> (1,4,84,84)
-            state = torch.from_numpy(state).permute(2,0,1).unsqueeze(0)
-            state = state.cuda() if use_cuda else state
+            
+            state = self.process_state(self.env.reset())
             state_buffer.append(state)
 
             done = False
             episode_duration = 0
 
-            # run n-1 steps first
+            # run n-1 steps 
             for _ in range(1, self.n_steps):
                 action = self.act(state)
                 next_state, reward, done, _ = self.env.step(action[0, 0])
-                next_state = torch.from_numpy(next_state).permute(2,0,1).unsqueeze(0)
-                next_state = next_state.cuda() if use_cuda else next_state
+                next_state = self.process_state(next_state)
                 if done:
                     next_state = None
                 state_buffer.append(next_state)
@@ -287,8 +301,7 @@ class Agent_DQN(Agent):
                 total_reward += reward
 
                 # process new state 
-                next_state = torch.from_numpy(next_state).permute(2,0,1).unsqueeze(0)
-                next_state = next_state.cuda() if use_cuda else next_state
+                next_state = self.process_state(next_state)
                 if done:
                     next_state = None
                 
@@ -310,6 +323,8 @@ class Agent_DQN(Agent):
                 # Perform one step of the optimization (on the target network)
                 if self.steps > self.learning_start and self.steps % self.train_freq == 0:
                     loss = self.update()
+                    if self.noise_linear:
+                        self.reset_noise()
                 
                 # update target network
                 if self.steps > self.learning_start and self.steps % self.target_update_freq == 0:
@@ -325,6 +340,7 @@ class Agent_DQN(Agent):
                 print('Episode: %d | Steps: %d/%d | Exploration: %f | Avg reward: %f | loss: %f | Episode Duration: %d'%
                         (self.episodes_done, self.steps, self.num_timesteps, self.exploration.value(self.steps), total_reward / self.display_freq, 
                         loss, episode_duration))
+                writer.add_scalar('reward', total_reward/self.display_freq, self.steps)
                 total_reward = 0
             
             self.episodes_done += 1
