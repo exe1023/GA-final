@@ -68,7 +68,7 @@ class Agent_ES:
                     input_size=env.observation_space.shape[0],
                     output_size=env.action_space.n,
                     time_factor=0,
-                    layers=[128, 64],
+                    layers=[64, 32],
                     activation='softmax',
                     noise_bias=1,
                     output_noise=[False, False, False])

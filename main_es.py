@@ -26,8 +26,8 @@ def run(args):
     #env = gym.make('Acrobot-v1')
     #env = gym.make('MountainCar-v0')
     #env = gym.make('BipedalWalker-v2')
-    #env = gym.make('LunarLander-v2')
-    env = trap.MKTrap(m=20, k=5)
+    env = gym.make('LunarLander-v2')
+    #env = trap.MKTrap(m=20, k=5)
     solve = (200, 100) # we solve cartpole when getting reward of 195 over 100 episode
     agent = Agent_ES(args, env, solve)
     if args.test:
